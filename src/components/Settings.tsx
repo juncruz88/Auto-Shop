@@ -1,0 +1,228 @@
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useShop } from '../store';
+import { CURRENCIES, formatMoney, plural } from '../lib/format';
+import { readBackup, saveBackupFile, type RestorePreview } from '../lib/backup';
+import { Button, Field, Modal, PageHeader } from './ui';
+
+const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+
+export default function Settings() {
+  const { state, dispatch } = useShop();
+  const [shopName, setShopName] = useState(state.settings.shopName);
+  const [currency, setCurrency] = useState(state.settings.currency);
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [pending, setPending] = useState<RestorePreview | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const noticeTimer = useRef<number | undefined>(undefined);
+
+  const dirty =
+    shopName.trim() !== state.settings.shopName || currency !== state.settings.currency;
+
+  useEffect(() => {
+    setShopName(state.settings.shopName);
+    setCurrency(state.settings.currency);
+  }, [state.settings.shopName, state.settings.currency]);
+
+  useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
+
+  function flash(message: string) {
+    setNotice(message);
+    window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(''), 6000);
+  }
+
+  function save() {
+    const name = shopName.trim() || 'My Auto Shop';
+    dispatch({ type: 'settings/save', settings: { shopName: name, currency } });
+    setShopName(name);
+    flash('Shop details saved.');
+  }
+
+  async function downloadBackup() {
+    setError('');
+    const result = await saveBackupFile(state);
+    if (result === 'cancelled') return;
+    flash(
+      result === 'android'
+        ? 'Choose a location — SD card, Downloads or cloud storage.'
+        : result === 'saved'
+          ? 'Backup saved.'
+          : 'Backup downloaded.',
+    );
+  }
+
+  async function chooseBackup(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setError('');
+    if (file.size > MAX_BACKUP_BYTES) {
+      setError('That backup is over 10 MB, which is too large to restore.');
+      return;
+    }
+    try {
+      setPending(readBackup(await file.text(), state.settings));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That backup could not be read.');
+    }
+  }
+
+  return (
+    <div className="page">
+      <PageHeader
+        title="Shop settings"
+        subtitle="The name, currency and backups used by this shop."
+      />
+      {notice ? (
+        <p className="page-status" role="status">
+          {notice}
+        </p>
+      ) : null}
+
+      <section className="card">
+        <div className="card-head">
+          <h2>Shop details</h2>
+          <span className="muted">Saved on this device</span>
+        </div>
+        <div className="form-grid cols-2">
+          <Field label="Shop name">
+            <input
+              value={shopName}
+              onChange={(event) => setShopName(event.target.value)}
+              placeholder="Ridgeline Auto Service"
+            />
+          </Field>
+          <Field label="Currency" hint={`Example: ${formatMoney(1234.5, currency)}`}>
+            <select value={currency} onChange={(event) => setCurrency(event.target.value)}>
+              {CURRENCIES.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="settings-actions">
+          <Button onClick={save} disabled={!shopName.trim() || !dirty}>
+            Save changes
+          </Button>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>Backup & restore</h2>
+          <span className="muted">JSON file</span>
+        </div>
+        <p className="muted settings-copy">
+          A backup holds customers, vehicles, work orders, inventory, the schedule and shop
+          settings. You choose where it is saved — on Android the system dialog can write to
+          Downloads, an SD card or cloud storage — and the same file moves between the browser,
+          the single-file app, iPhone and the Android app.
+        </p>
+        <div className="settings-actions">
+          <Button onClick={downloadBackup}>Download backup</Button>
+          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
+            Restore from file
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="*/*"
+            className="visually-hidden"
+            onChange={chooseBackup}
+          />
+        </div>
+        {error ? (
+          <p className="form-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>Maintenance</h2>
+        </div>
+        <p className="muted settings-copy">
+          Reset replaces customers, vehicles, work orders, inventory and appointments with the demo
+          set. Your shop name and currency are kept.
+        </p>
+        <div className="settings-actions">
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (window.confirm('Reset all shop data back to the demo set?')) {
+                dispatch({ type: 'reset' });
+                flash('Demo data restored.');
+              }
+            }}
+          >
+            Reset demo data
+          </Button>
+          <span className="muted">This cannot be undone.</span>
+        </div>
+      </section>
+
+      {pending ? (
+        <Modal
+          title="Restore this backup?"
+          subtitle="The current shop data will be replaced."
+          onClose={() => setPending(null)}
+          size="sm"
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setPending(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  dispatch({ type: 'data/import', state: pending.state });
+                  setPending(null);
+                  flash('Backup restored.');
+                }}
+              >
+                Replace data
+              </Button>
+            </>
+          }
+        >
+          <div className="backup-summary">
+            <div>
+              <span className="cell-sub">Shop</span>
+              <strong>{pending.state.settings.shopName}</strong>
+            </div>
+            <div>
+              <span className="cell-sub">Currency</span>
+              <strong>{pending.state.settings.currency}</strong>
+            </div>
+          </div>
+          <ul className="backup-counts">
+            <li>{plural(pending.state.customers.length, 'customer')}</li>
+            <li>{plural(pending.state.vehicles.length, 'vehicle')}</li>
+            <li>{plural(pending.state.jobs.length, 'work order')}</li>
+            <li>
+              {plural(
+                pending.state.items.filter((item) => item.kind === 'part').length,
+                'part',
+              )}
+            </li>
+            <li>{plural(pending.state.appointments.length, 'appointment')}</li>
+          </ul>
+          {pending.notes.length > 0 ? (
+            <div className="backup-notes" role="status">
+              <strong>Some entries were repaired or skipped</strong>
+              <ul>
+                {pending.notes.map((note) => (
+                  <li key={note}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p className="muted">Its shop name and currency are applied too.</p>
+        </Modal>
+      ) : null}
+    </div>
+  );
+}

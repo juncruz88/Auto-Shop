@@ -1,0 +1,9 @@
+{
+  "name": "ridgeline-auto-shop-local",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  }
+}

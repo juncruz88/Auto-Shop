@@ -1,0 +1,247 @@
+import type { AppState, Appointment, CatalogItem, Customer, Job, LineItem, Vehicle } from './types';
+import { addDays } from './lib/format';
+
+const daysAgo = (days: number) =>
+  new Date(Date.now() - days * 86_400_000).toISOString();
+
+const line = (
+  id: string,
+  kind: 'labor' | 'part',
+  description: string,
+  qty: number,
+  unitPrice: number,
+  itemId?: string,
+): LineItem => ({ id, kind, description, qty, unitPrice, itemId });
+
+export function seedState(): AppState {
+  const customers: Customer[] = [
+    {
+      id: 'cust-1',
+      name: 'Maria Alvarez',
+      phone: '(512) 555-0147',
+      email: 'maria.alvarez@example.com',
+      address: '1208 Cedar Bend Dr',
+      notes: 'Prefers text messages for approvals.',
+      createdAt: daysAgo(210),
+    },
+    {
+      id: 'cust-2',
+      name: 'Devon Clarke',
+      phone: '(512) 555-0192',
+      email: 'dclarke@example.com',
+      address: '44 Willow Creek Rd',
+      notes: 'Uses the truck for work — needs same-day turnaround.',
+      createdAt: daysAgo(120),
+    },
+    {
+      id: 'cust-3',
+      name: 'Priya Nair',
+      phone: '(737) 555-0110',
+      email: 'priya.nair@example.com',
+      address: '905 Live Oak St, Apt 7',
+      notes: '',
+      createdAt: daysAgo(75),
+    },
+    {
+      id: 'cust-4',
+      name: 'Marcus Webb',
+      phone: '(512) 555-0166',
+      email: 'mwebb@example.com',
+      address: '2311 Ridgeview Ln',
+      notes: 'Second vehicle: 2009 Tacoma (not yet in system).',
+      createdAt: daysAgo(400),
+    },
+    {
+      id: 'cust-5',
+      name: 'Grace Okafor',
+      phone: '(512) 555-0188',
+      email: 'grace.okafor@example.com',
+      address: '77 Harmon Ave',
+      notes: 'Fleet account — invoice monthly.',
+      createdAt: daysAgo(30),
+    },
+  ];
+
+  const vehicles: Vehicle[] = [
+    { id: 'veh-1', customerId: 'cust-1', year: 2019, make: 'Toyota', model: 'Camry', vin: '4T1B11HK5KU812345', plate: 'HXK-4412', mileage: 78420 },
+    { id: 'veh-2', customerId: 'cust-2', year: 2016, make: 'Ford', model: 'F-150', vin: '1FTEW1EF7GFA20891', plate: 'TRK-8891', mileage: 142300 },
+    { id: 'veh-3', customerId: 'cust-3', year: 2021, make: 'Subaru', model: 'Outback', vin: '4S4BTANC2M3120774', plate: 'SUB-2210', mileage: 31280 },
+    { id: 'veh-4', customerId: 'cust-4', year: 2014, make: 'Honda', model: 'Civic', vin: '19XFB2F59EE213456', plate: 'CVK-7712', mileage: 196540 },
+    { id: 'veh-5', customerId: 'cust-5', year: 2018, make: 'Jeep', model: 'Cherokee', vin: '1C4PJMCB8JD512894', plate: 'JEP-9034', mileage: 64110 },
+  ];
+
+  const items: CatalogItem[] = [
+    { id: 'svc-oil', kind: 'labor', name: 'Oil & filter change', price: 49.95 },
+    { id: 'svc-rotation', kind: 'labor', name: 'Tire rotation', price: 29.95 },
+    { id: 'svc-brakes', kind: 'labor', name: 'Front brake pad replacement', price: 189.0 },
+    { id: 'svc-align', kind: 'labor', name: 'Wheel alignment', price: 129.0 },
+    { id: 'svc-diag', kind: 'labor', name: 'Diagnostic scan', price: 119.0 },
+    { id: 'svc-ac', kind: 'labor', name: 'A/C recharge', price: 159.0 },
+    { id: 'svc-trans', kind: 'labor', name: 'Transmission service', price: 249.0 },
+    { id: 'part-oilfilter', kind: 'part', name: 'Oil filter', sku: 'OF-114', price: 14.5, stock: 18, reorderAt: 6 },
+    { id: 'part-oil', kind: 'part', name: 'Synthetic 5W-30 (qt)', sku: 'OIL-530', price: 9.75, stock: 24, reorderAt: 8 },
+    { id: 'part-brakepad', kind: 'part', name: 'Front brake pad set', sku: 'BP-332', price: 89.0, stock: 4, reorderAt: 3 },
+    { id: 'part-cabin', kind: 'part', name: 'Cabin air filter', sku: 'CAF-208', price: 22.0, stock: 9, reorderAt: 4 },
+    { id: 'part-plug', kind: 'part', name: 'Iridium spark plug', sku: 'SP-901', price: 12.5, stock: 12, reorderAt: 6 },
+    { id: 'part-wiper', kind: 'part', name: 'Wiper blade 22"', sku: 'WB-22', price: 18.0, stock: 2, reorderAt: 4 },
+    { id: 'part-belt', kind: 'part', name: 'Serpentine belt', sku: 'SB-776', price: 41.0, stock: 1, reorderAt: 2 },
+  ];
+
+  const jobs: Job[] = [
+    {
+      id: 'job-1041',
+      number: 1041,
+      customerId: 'cust-1',
+      vehicleId: 'veh-1',
+      status: 'in-progress',
+      technician: 'Diego Ramos',
+      promisedAt: addDays(0),
+      mileageIn: 78420,
+      notes: 'Customer asked us to check the squeak from the rear suspension while it is on the lift.',
+      paid: false,
+      createdAt: daysAgo(1),
+      items: [
+        line('li-1', 'labor', 'Oil & filter change', 1, 49.95, 'svc-oil'),
+        line('li-2', 'part', 'Oil filter', 1, 14.5, 'part-oilfilter'),
+        line('li-3', 'part', 'Synthetic 5W-30 (qt)', 5, 9.75, 'part-oil'),
+      ],
+    },
+    {
+      id: 'job-1042',
+      number: 1042,
+      customerId: 'cust-2',
+      vehicleId: 'veh-2',
+      status: 'estimate',
+      technician: 'Sam Whitfield',
+      promisedAt: addDays(1),
+      mileageIn: 142300,
+      notes: 'Front pads at 2mm. Rotors measure within spec.',
+      paid: false,
+      createdAt: daysAgo(0),
+      items: [
+        line('li-4', 'labor', 'Front brake pad replacement', 1, 189.0, 'svc-brakes'),
+        line('li-5', 'part', 'Front brake pad set', 1, 89.0, 'part-brakepad'),
+      ],
+    },
+    {
+      id: 'job-1043',
+      number: 1043,
+      customerId: 'cust-5',
+      vehicleId: 'veh-5',
+      status: 'approved',
+      technician: 'Diego Ramos',
+      promisedAt: addDays(1),
+      mileageIn: 64110,
+      notes: 'A/C blows warm at idle. Recharge and check for leaks.',
+      paid: false,
+      createdAt: daysAgo(0),
+      items: [
+        line('li-6', 'labor', 'A/C recharge', 1, 159.0, 'svc-ac'),
+        line('li-7', 'part', 'Cabin air filter', 1, 22.0, 'part-cabin'),
+      ],
+    },
+    {
+      id: 'job-1040',
+      number: 1040,
+      customerId: 'cust-3',
+      vehicleId: 'veh-3',
+      status: 'ready',
+      technician: 'Nia Patel',
+      promisedAt: addDays(0),
+      mileageIn: 31280,
+      notes: 'Pull to the right corrected. Keys and tag in the lockbox.',
+      paid: false,
+      createdAt: daysAgo(2),
+      items: [
+        line('li-8', 'labor', 'Wheel alignment', 1, 129.0, 'svc-align'),
+        line('li-9', 'labor', 'Tire rotation', 1, 29.95, 'svc-rotation'),
+      ],
+    },
+    {
+      id: 'job-1039',
+      number: 1039,
+      customerId: 'cust-4',
+      vehicleId: 'veh-4',
+      status: 'completed',
+      technician: 'Sam Whitfield',
+      promisedAt: addDays(-2),
+      mileageIn: 196100,
+      notes: 'Misfire resolved after plug replacement.',
+      paid: true,
+      createdAt: daysAgo(4),
+      items: [
+        line('li-10', 'labor', 'Diagnostic scan', 1, 119.0, 'svc-diag'),
+        line('li-11', 'part', 'Iridium spark plug', 4, 12.5, 'part-plug'),
+      ],
+    },
+  ];
+
+  const appointments: Appointment[] = [
+    {
+      id: 'appt-1',
+      customerId: 'cust-4',
+      vehicleId: 'veh-4',
+      service: 'Oil & filter change',
+      date: addDays(0),
+      time: '10:00',
+      durationMin: 60,
+      status: 'scheduled',
+      notes: 'Wait-in appointment.',
+    },
+    {
+      id: 'appt-2',
+      customerId: 'cust-3',
+      vehicleId: 'veh-3',
+      service: 'Tire rotation',
+      date: addDays(0),
+      time: '14:30',
+      durationMin: 45,
+      status: 'scheduled',
+      notes: '',
+    },
+    {
+      id: 'appt-3',
+      customerId: 'cust-5',
+      vehicleId: 'veh-5',
+      service: 'Brake inspection',
+      date: addDays(1),
+      time: '09:00',
+      durationMin: 45,
+      status: 'scheduled',
+      notes: 'Fleet vehicle — PO on file.',
+    },
+    {
+      id: 'appt-4',
+      customerId: 'cust-2',
+      vehicleId: 'veh-2',
+      service: 'Diagnostic scan',
+      date: addDays(-1),
+      time: '11:00',
+      durationMin: 60,
+      status: 'done',
+      notes: 'Check engine light — cleared, monitor.',
+    },
+    {
+      id: 'appt-5',
+      customerId: 'cust-1',
+      vehicleId: 'veh-1',
+      service: 'Wheel alignment',
+      date: addDays(2),
+      time: '13:00',
+      durationMin: 90,
+      status: 'scheduled',
+      notes: '',
+    },
+  ];
+
+  return {
+    customers,
+    vehicles,
+    items,
+    jobs,
+    appointments,
+    settings: { shopName: 'Ridgeline Auto Service', currency: 'PHP' },
+    nextJobNumber: 1044,
+    taxRate: 0.0825,
+  };
+}
