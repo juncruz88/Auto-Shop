@@ -226,6 +226,7 @@ textarea {
   justify-content: center;
   gap: 6px;
   padding: 10px 16px;
+  text-decoration: none;
   border: 1px solid transparent;
   border-radius: 10px;
   font-size: 14px;

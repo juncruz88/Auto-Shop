@@ -54,6 +54,6 @@ The first build using this fixed key must be installed after uninstalling any ea
 The Build workflow in `.github/workflows/build.yml` runs on every push in two independent build jobs:
 
 - **Web and single-file build** — `npm ci`, `npm run build`, and `npm run build:single`.
-- **Android APK** — installs JDK 17, Android SDK build-tools 34.0.0 and platform android-34, runs `npm run build:apk`, and uploads the APK and single-file HTML as the `ridgeline-auto-shop-android` artifact. The Android SDK is cached between runs; the APK is debug-signed.
+- **Android APK** — installs JDK 17, Android SDK build-tools 34.0.0 and platform android-34, runs `npm run build:apk`, checks the APK version against the release tag, and uploads the APK and single-file HTML as the `ridgeline-auto-shop-android` artifact. The Android SDK is cached between runs; the APK is debug-signed.
 
 Pushing a semver tag such as `v1.2.3` builds the APK with version name `1.2.3` and a version code derived from the tag, then publishes a GitHub Release with the signed APK, the single-file HTML, `SHA256SUMS`, and `INSTALL.md` attached. Release assets can be downloaded without a GitHub login and do not expire.

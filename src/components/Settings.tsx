@@ -1,10 +1,20 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
 import { useShop } from '../store';
 import { CURRENCIES, formatMoney, plural } from '../lib/format';
 import { readBackup, saveBackupFile, type RestorePreview } from '../lib/backup';
 import { Button, Field, Modal, PageHeader } from './ui';
 
 const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+const RELEASES_URL = 'https://github.com/juncruz88/Auto-Shop/releases/latest';
+
+type AndroidAppBridge = { openReleases?: () => void };
+
+function openReleases(event: MouseEvent<HTMLAnchorElement>) {
+  const bridge = (window as Window & { AndroidApp?: AndroidAppBridge }).AndroidApp;
+  if (!bridge?.openReleases) return;
+  event.preventDefault();
+  bridge.openReleases();
+}
 
 export default function Settings() {
   const { state, dispatch } = useShop();
@@ -139,6 +149,27 @@ export default function Settings() {
             {error}
           </p>
         ) : null}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>App updates</h2>
+          <span className="muted">GitHub Releases</span>
+        </div>
+        <p className="muted settings-copy">
+          Download the latest APK or standalone HTML from the newest GitHub Release.
+        </p>
+        <div className="settings-actions">
+          <a
+            className="btn btn-secondary"
+            href={RELEASES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={openReleases}
+          >
+            Check for updates
+          </a>
+        </div>
       </section>
 
       <section className="card">

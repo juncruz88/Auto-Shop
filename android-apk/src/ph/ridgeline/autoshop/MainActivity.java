@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 public class MainActivity extends Activity {
 
     private static final String START_URL = "https://app.local/index.html";
+    private static final String RELEASES_URL = "https://github.com/juncruz88/Auto-Shop/releases/latest";
     private static final int CAMERA_REQUEST = 41;
     private static final int SAVE_BACKUP_REQUEST = 42;
     private static final int OPEN_BACKUP_REQUEST = 43;
@@ -51,6 +52,7 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
 
         webView.addJavascriptInterface(new BackupBridge(), "AndroidBackup");
+        webView.addJavascriptInterface(new AppBridge(), "AndroidApp");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -136,6 +138,20 @@ public class MainActivity extends Activity {
                 intent.setType("application/json");
                 intent.putExtra(Intent.EXTRA_TITLE, filename);
                 startActivityForResult(intent, SAVE_BACKUP_REQUEST);
+            });
+        }
+    }
+
+    /** Opens the latest GitHub Release in the system browser. */
+    private class AppBridge {
+        @JavascriptInterface
+        public void openReleases() {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_URL)));
+                } catch (Exception error) {
+                    toast("Could not open the releases page");
+                }
             });
         }
     }
