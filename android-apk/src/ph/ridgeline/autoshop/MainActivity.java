@@ -212,6 +212,7 @@ public class MainActivity extends Activity {
             if (content != null && hasStorageAccess()) {
                 autoBackupStore.save(content);
             }
+            notifyAutoBackupsChanged();
             return;
         }
         if (requestCode != CAMERA_REQUEST || pendingCameraRequest == null) {
@@ -265,6 +266,14 @@ public class MainActivity extends Activity {
             pendingFileChooser.onReceiveValue(results);
             pendingFileChooser = null;
         }
+    }
+
+    private void notifyAutoBackupsChanged() {
+        if (webView == null) return;
+        webView.post(() -> webView.evaluateJavascript(
+                "window.dispatchEvent(new Event('android-auto-backups-changed'))",
+                null
+        ));
     }
 
     private void toast(String message) {

@@ -59,6 +59,11 @@ export default function Settings() {
 
   useEffect(() => {
     void reloadLocalBackups();
+    const refresh = () => {
+      void reloadLocalBackups();
+    };
+    window.addEventListener('android-auto-backups-changed', refresh);
+    return () => window.removeEventListener('android-auto-backups-changed', refresh);
   }, []);
 
   function flash(message: string) {
