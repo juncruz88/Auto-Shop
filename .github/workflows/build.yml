@@ -88,3 +88,27 @@ jobs:
             downloads/ridgeline-auto-shop.apk
             downloads/ridgeline-auto-shop.html
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build, apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK and single-file HTML
+        uses: actions/download-artifact@v4
+        with:
+          name: ridgeline-auto-shop-android
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Ridgeline Auto Shop ${{ github.ref_name }}
+          files: |
+            release/ridgeline-auto-shop.apk
+            release/ridgeline-auto-shop.html
+          overwrite_files: true
+          generate_release_notes: true

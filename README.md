@@ -51,7 +51,9 @@ The first build using this fixed key must be installed after uninstalling any ea
 
 ## CI
 
-The Build workflow in `.github/workflows/build.yml` runs on every push in two independent jobs:
+The Build workflow in `.github/workflows/build.yml` runs on every push in two independent build jobs:
 
 - **Web and single-file build** — `npm ci`, `npm run build`, and `npm run build:single`.
 - **Android APK** — installs JDK 17, Android SDK build-tools 34.0.0 and platform android-34, runs `npm run build:apk`, and uploads the APK and single-file HTML as the `ridgeline-auto-shop-android` artifact. The Android SDK is cached between runs; the APK is debug-signed.
+
+Pushing a version tag, for example `v1.0.0`, also publishes a GitHub Release with the signed APK and single-file HTML attached, so they can be downloaded without a GitHub login and without dealing with artifact expiration.
