@@ -29,6 +29,51 @@ jobs:
       - name: Build single-file HTML
         run: npm run build:single
 
-# The APK build is intentionally not part of CI: it requires JDK 17 plus
-# Android SDK build-tools 34.0.0 and platform android-34, which are not
-# installed on the default runner.
+  apk:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/.android-sdk
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-sdk
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_HOME }}
+          key: android-sdk-${{ runner.os }}-cmdline-16-bt34-platform34-v1
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "build-tools;34.0.0 platforms;android-34"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build APK
+        run: npm run build:apk
+
+      - name: Upload APK and single-file HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: ridgeline-auto-shop-android
+          path: |
+            downloads/ridgeline-auto-shop.apk
+            downloads/ridgeline-auto-shop.html
+          if-no-files-found: error

@@ -49,4 +49,7 @@ This rebuilds the single-file HTML, then writes `downloads/ridgeline-auto-shop.a
 
 ## CI
 
-The Build workflow in `.github/workflows/build.yml` runs `npm ci`, `npm run build`, and `npm run build:single` on every push. The APK build is excluded because the default runner does not include the Android SDK.
+The Build workflow in `.github/workflows/build.yml` runs on every push in two independent jobs:
+
+- **Web and single-file build** — `npm ci`, `npm run build`, and `npm run build:single`.
+- **Android APK** — installs JDK 17, Android SDK build-tools 34.0.0 and platform android-34, runs `npm run build:apk`, and uploads the APK and single-file HTML as the `ridgeline-auto-shop-android` artifact. The Android SDK is cached between runs; the APK is debug-signed.
