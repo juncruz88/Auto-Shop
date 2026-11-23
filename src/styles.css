@@ -1574,6 +1574,39 @@ textarea {
   padding-left: 18px;
 }
 
+.local-backups {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.local-backup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.local-backup div {
+  display: grid;
+  gap: 2px;
+}
+
+.local-backup strong {
+  font-size: 13px;
+}
+
+.local-backup span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
 .ios-install {
   position: fixed;
   right: 20px;

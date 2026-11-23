@@ -7,8 +7,28 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
   build:
     name: Web and single-file build
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -31,6 +51,7 @@ jobs:
 
   apk:
     name: Android APK
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -69,21 +90,7 @@ jobs:
 
       - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Release tags must use the form vMAJOR.MINOR.PATCH"
-            exit 1
-          fi
-          major=$((10#${BASH_REMATCH[1]}))
-          minor=$((10#${BASH_REMATCH[2]}))
-          patch=$((10#${BASH_REMATCH[3]}))
-          if (( minor > 999 || patch > 999 )); then
-            echo "::error::Minor and patch versions must be 999 or lower"
-            exit 1
-          fi
-          echo "VERSION_NAME=$version" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_ENV"
+        run: node scripts/release-version.mjs "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
 
       - name: Build APK
         run: npm run build:apk

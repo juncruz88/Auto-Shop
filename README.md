@@ -31,6 +31,20 @@ npm run build:single
 
 Inlines the JavaScript and CSS into `downloads/ridgeline-auto-shop.html`, a self-contained file that can be opened directly or shared.
 
+## Tests
+
+```bash
+npm test
+```
+
+Runs the backup-normalisation and release-tag parser tests with Vitest. The same command runs in CI before either build job.
+
+## Automatic backups
+
+On Android, every automatic snapshot is also written to `Downloads/Ridgeline Auto Shop` and the newest 10 are kept. These files are outside the app's private data, so they remain after clearing the app's storage; the Settings page lists them for restore. Android 10 and newer uses MediaStore and needs no storage permission. Android 6–9 asks for the legacy storage permission the first time it saves to shared Downloads and falls back to IndexedDB if permission is denied.
+
+On the web the app uses IndexedDB. Clearing all site data removes IndexedDB, so export a JSON backup before clearing browser data.
+
 ## Android APK
 
 Prerequisites:
@@ -51,8 +65,9 @@ The first build using this fixed key must be installed after uninstalling any ea
 
 ## CI
 
-The Build workflow in `.github/workflows/build.yml` runs on every push in two independent build jobs:
+The Build workflow in `.github/workflows/build.yml` runs on every push with a test job and two independent build jobs:
 
+- **Tests** — `npm ci` and `npm test`; both build jobs wait for it to pass.
 - **Web and single-file build** — `npm ci`, `npm run build`, and `npm run build:single`.
 - **Android APK** — installs JDK 17, Android SDK build-tools 34.0.0 and platform android-34, runs `npm run build:apk`, checks the APK version against the release tag, and uploads the APK and single-file HTML as the `ridgeline-auto-shop-android` artifact. The Android SDK is cached between runs; the APK is debug-signed.
 

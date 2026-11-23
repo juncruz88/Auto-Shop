@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
@@ -30,16 +31,21 @@ public class MainActivity extends Activity {
     private static final int CAMERA_REQUEST = 41;
     private static final int SAVE_BACKUP_REQUEST = 42;
     private static final int OPEN_BACKUP_REQUEST = 43;
+    private static final int AUTO_BACKUP_PERMISSION_REQUEST = 44;
 
     private WebView webView;
+    private AutoBackupStore autoBackupStore;
     private PermissionRequest pendingCameraRequest;
     private ValueCallback<Uri[]> pendingFileChooser;
     private volatile String pendingBackupContent;
+    private volatile String pendingAutoBackupContent;
+    private volatile boolean autoBackupPermissionAsked;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        autoBackupStore = new AutoBackupStore(this);
         webView = new WebView(this);
         setContentView(webView);
 
@@ -53,6 +59,7 @@ public class MainActivity extends Activity {
 
         webView.addJavascriptInterface(new BackupBridge(), "AndroidBackup");
         webView.addJavascriptInterface(new AppBridge(), "AndroidApp");
+        webView.addJavascriptInterface(new AutoBackupBridge(), "AndroidAutoBackups");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -142,6 +149,46 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Stores rotating snapshots in shared Downloads so they survive clearing app data. */
+    private class AutoBackupBridge {
+        @JavascriptInterface
+        public boolean save(final String content) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q || hasStorageAccess()) {
+                return autoBackupStore.save(content);
+            }
+
+            pendingAutoBackupContent = content;
+            if (!autoBackupPermissionAsked) {
+                autoBackupPermissionAsked = true;
+                runOnUiThread(() -> requestPermissions(
+                        new String[]{
+                                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                Manifest.permission.READ_EXTERNAL_STORAGE,
+                        },
+                        AUTO_BACKUP_PERMISSION_REQUEST
+                ));
+            }
+            return false;
+        }
+
+        @JavascriptInterface
+        public String list() {
+            return autoBackupStore.list();
+        }
+
+        @JavascriptInterface
+        public String read(String id) {
+            return autoBackupStore.read(id);
+        }
+    }
+
+    private boolean hasStorageAccess() {
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
     /** Opens the latest GitHub Release in the system browser. */
     private class AppBridge {
         @JavascriptInterface
@@ -159,6 +206,14 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == AUTO_BACKUP_PERMISSION_REQUEST) {
+            String content = pendingAutoBackupContent;
+            pendingAutoBackupContent = null;
+            if (content != null && hasStorageAccess()) {
+                autoBackupStore.save(content);
+            }
+            return;
+        }
         if (requestCode != CAMERA_REQUEST || pendingCameraRequest == null) {
             return;
         }

@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   type Dispatch,
   type ReactNode,
 } from 'react';
@@ -22,6 +23,11 @@ import type {
 } from './types';
 import { seedState } from './seed';
 import { formatMoney } from './lib/format';
+import {
+  AUTO_BACKUP_INTERVAL_MS,
+  ensureLocalBackup,
+  saveLocalBackup,
+} from './lib/localBackups';
 
 const STORAGE_KEY = 'ridgeline-autoshop-v1';
 
@@ -250,6 +256,8 @@ const ShopContext = createContext<ShopContextValue | null>(null);
 
 export function ShopProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadState);
+  const firstRender = useRef(true);
+  const lastAutoBackup = useRef(0);
 
   useEffect(() => {
     try {
@@ -257,6 +265,22 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     } catch {
       // Storage can be unavailable (private mode) — the app still works in memory.
     }
+
+    if (firstRender.current) {
+      firstRender.current = false;
+      lastAutoBackup.current = Date.now();
+      void ensureLocalBackup(state).catch(() => {
+        // Local snapshots are best-effort; the main state is still saved above.
+      });
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastAutoBackup.current < AUTO_BACKUP_INTERVAL_MS) return;
+    lastAutoBackup.current = now;
+    void saveLocalBackup(state).catch(() => {
+      // Keep the app usable if IndexedDB is unavailable or full.
+    });
   }, [state]);
 
   const money = useCallback(

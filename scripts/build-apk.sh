@@ -44,7 +44,7 @@ echo "2/6 Packaging resources"
 
 echo "3/6 Compiling Java"
 find "$BUILD/gen" -name '*.java' > "$BUILD/sources.txt"
-echo "$ROOT/android-apk/src/ph/ridgeline/autoshop/MainActivity.java" >> "$BUILD/sources.txt"
+find "$ROOT/android-apk/src" -name '*.java' >> "$BUILD/sources.txt"
 "$JAVA_HOME/bin/javac" --release 17 -classpath "$PLATFORM" -d "$BUILD/classes" @"$BUILD/sources.txt"
 
 echo "4/6 Dexing"

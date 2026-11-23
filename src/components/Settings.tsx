@@ -2,6 +2,13 @@ import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from '
 import { useShop } from '../store';
 import { CURRENCIES, formatMoney, plural } from '../lib/format';
 import { readBackup, saveBackupFile, type RestorePreview } from '../lib/backup';
+import {
+  MAX_LOCAL_BACKUPS,
+  getLocalBackup,
+  listLocalBackups,
+  saveLocalBackup,
+  type LocalBackupSummary,
+} from '../lib/localBackups';
 import { Button, Field, Modal, PageHeader } from './ui';
 
 const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
@@ -16,6 +23,11 @@ function openReleases(event: MouseEvent<HTMLAnchorElement>) {
   bridge.openReleases();
 }
 
+function formatSavedAt(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
 export default function Settings() {
   const { state, dispatch } = useShop();
   const [shopName, setShopName] = useState(state.settings.shopName);
@@ -23,6 +35,7 @@ export default function Settings() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState<RestorePreview | null>(null);
+  const [localBackups, setLocalBackups] = useState<LocalBackupSummary[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const noticeTimer = useRef<number | undefined>(undefined);
 
@@ -35,6 +48,18 @@ export default function Settings() {
   }, [state.settings.shopName, state.settings.currency]);
 
   useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
+
+  async function reloadLocalBackups() {
+    try {
+      setLocalBackups(await listLocalBackups());
+    } catch {
+      setLocalBackups([]);
+    }
+  }
+
+  useEffect(() => {
+    void reloadLocalBackups();
+  }, []);
 
   function flash(message: string) {
     setNotice(message);
@@ -75,6 +100,39 @@ export default function Settings() {
       setPending(readBackup(await file.text(), state.settings));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That backup could not be read.');
+    }
+  }
+
+  async function snapshotCurrent() {
+    try {
+      await saveLocalBackup(state);
+    } catch {
+      // Snapshotting is best-effort; the main state still saves locally.
+    }
+  }
+
+  async function restoreLocalBackup(backup: LocalBackupSummary) {
+    setError('');
+    try {
+      const record = await getLocalBackup(backup.id);
+      if (!record) {
+        setError('That local backup is no longer available.');
+        return;
+      }
+      if (
+        !window.confirm(
+          `Restore the local backup from ${formatSavedAt(backup.savedAt)}? Current shop data will be replaced.`,
+        )
+      ) {
+        return;
+      }
+      await snapshotCurrent();
+      const preview = readBackup(JSON.stringify(record.state), state.settings);
+      dispatch({ type: 'data/import', state: preview.state });
+      flash('Local backup restored.');
+      await reloadLocalBackups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That local backup could not be restored.');
     }
   }
 
@@ -153,6 +211,42 @@ export default function Settings() {
 
       <section className="card">
         <div className="card-head">
+          <h2>Local backups</h2>
+          <span className="muted">Last {MAX_LOCAL_BACKUPS}</span>
+        </div>
+        <p className="muted settings-copy">
+          Automatic snapshots are kept on this device. On Android, copies are also saved to
+          Downloads/Ridgeline Auto Shop, so they survive clearing the app's data. Android 9 and
+          older ask for storage access the first time. On the web, a full site-data clear removes
+          them, so keep an exported JSON backup as well.
+        </p>
+        {localBackups.length === 0 ? (
+          <p className="muted">No local snapshots yet. One is saved automatically as you work.</p>
+        ) : (
+          <ul className="local-backups">
+            {localBackups.map((backup) => (
+              <li className="local-backup" key={backup.id}>
+                <div>
+                  <strong>{formatSavedAt(backup.savedAt)}</strong>
+                  <span>
+                    {plural(backup.jobs, 'work order')} · {plural(backup.customers, 'customer')}
+                  </span>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void restoreLocalBackup(backup)}
+                >
+                  Restore
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-head">
           <h2>App updates</h2>
           <span className="muted">GitHub Releases</span>
         </div>
@@ -183,16 +277,17 @@ export default function Settings() {
         <div className="settings-actions">
           <Button
             variant="danger"
-            onClick={() => {
-              if (window.confirm('Reset all shop data back to the demo set?')) {
-                dispatch({ type: 'reset' });
-                flash('Demo data restored.');
-              }
+            onClick={async () => {
+              if (!window.confirm('Reset all shop data back to the demo set?')) return;
+              await snapshotCurrent();
+              dispatch({ type: 'reset' });
+              flash('Demo data restored.');
+              await reloadLocalBackups();
             }}
           >
             Reset demo data
           </Button>
-          <span className="muted">This cannot be undone.</span>
+          <span className="muted">A local snapshot is saved first.</span>
         </div>
       </section>
 
@@ -208,10 +303,12 @@ export default function Settings() {
                 Cancel
               </Button>
               <Button
-                onClick={() => {
+                onClick={async () => {
+                  await snapshotCurrent();
                   dispatch({ type: 'data/import', state: pending.state });
                   setPending(null);
                   flash('Backup restored.');
+                  await reloadLocalBackups();
                 }}
               >
                 Replace data
