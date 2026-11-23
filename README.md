@@ -45,7 +45,7 @@ The build script expects `JAVA_HOME` and `ANDROID_HOME` at `~/tools/jdk` and `~/
 npm run build:apk
 ```
 
-This rebuilds the single-file HTML, then writes `downloads/ridgeline-auto-shop.apk`. It is signed with the checked-in `android-apk/debug.keystore` (alias `androiddebugkey`, password `android`), so every build shares the same signature and later builds can install over earlier ones. The key is for sideloading only, not store distribution.
+This rebuilds the single-file HTML, then writes `downloads/ridgeline-auto-shop.apk`. Set `VERSION_NAME` (for example `1.2.3`) and `VERSION_CODE` (a positive integer) to override the defaults of `1.0` and `1`; CI sets both from the release tag. It is signed with the checked-in `android-apk/debug.keystore` (alias `androiddebugkey`, password `android`), so every build shares the same signature and later builds can install over earlier ones. The key is for sideloading only, not store distribution.
 
 The first build using this fixed key must be installed after uninstalling any earlier build signed with a different debug key. Uninstalling clears the app's local data, so export a backup first. After that one-time uninstall, future builds update in place.
 
@@ -56,4 +56,4 @@ The Build workflow in `.github/workflows/build.yml` runs on every push in two in
 - **Web and single-file build** — `npm ci`, `npm run build`, and `npm run build:single`.
 - **Android APK** — installs JDK 17, Android SDK build-tools 34.0.0 and platform android-34, runs `npm run build:apk`, and uploads the APK and single-file HTML as the `ridgeline-auto-shop-android` artifact. The Android SDK is cached between runs; the APK is debug-signed.
 
-Pushing a version tag, for example `v1.0.0`, also publishes a GitHub Release with the signed APK and single-file HTML attached, so they can be downloaded without a GitHub login and without dealing with artifact expiration.
+Pushing a semver tag such as `v1.2.3` builds the APK with version name `1.2.3` and a version code derived from the tag, then publishes a GitHub Release with the signed APK, the single-file HTML, `SHA256SUMS`, and `INSTALL.md` attached. Release assets can be downloaded without a GitHub login and do not expire.

@@ -9,6 +9,12 @@ BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
 PLATFORM="$ANDROID_HOME/platforms/android-34/android.jar"
 BUILD="$ROOT/.apk-build"
 OUT="$ROOT/downloads/ridgeline-auto-shop.apk"
+VERSION_NAME="${VERSION_NAME:-1.0}"
+VERSION_CODE="${VERSION_CODE:-1}"
+case "$VERSION_CODE" in
+  ''|*[!0-9]*) echo "VERSION_CODE must be a positive integer"; exit 1 ;;
+esac
+[ "$VERSION_CODE" -gt 0 ] || { echo "VERSION_CODE must be a positive integer"; exit 1; }
 
 for tool in "$BUILD_TOOLS/aapt2" "$BUILD_TOOLS/d8" "$BUILD_TOOLS/zipalign" "$BUILD_TOOLS/apksigner"; do
   [ -x "$tool" ] || { echo "Missing $tool — install Android build-tools 34.0.0"; exit 1; }
@@ -31,8 +37,8 @@ echo "2/6 Packaging resources"
   --java "$BUILD/gen" \
   --min-sdk-version 23 \
   --target-sdk-version 34 \
-  --version-code 1 \
-  --version-name 1.0 \
+  --version-code "$VERSION_CODE" \
+  --version-name "$VERSION_NAME" \
   -A "$BUILD/assets" \
   "$BUILD/res.zip"
 

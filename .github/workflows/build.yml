@@ -67,6 +67,24 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Release tags must use the form vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          major=$((10#${BASH_REMATCH[1]}))
+          minor=$((10#${BASH_REMATCH[2]}))
+          patch=$((10#${BASH_REMATCH[3]}))
+          if (( minor > 999 || patch > 999 )); then
+            echo "::error::Minor and patch versions must be 999 or lower"
+            exit 1
+          fi
+          echo "VERSION_NAME=$version" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$((major * 1000000 + minor * 1000 + patch))" >> "$GITHUB_ENV"
+
       - name: Build APK
         run: npm run build:apk
 
@@ -103,6 +121,23 @@ jobs:
           name: ridgeline-auto-shop-android
           path: release
 
+      - name: Prepare checksums and install notes
+        run: |
+          cd release
+          sha256sum ridgeline-auto-shop.apk ridgeline-auto-shop.html > SHA256SUMS
+          cat > INSTALL.md <<'EOF'
+          # Install Ridgeline Auto Shop
+
+          1. Download `ridgeline-auto-shop.apk` on your Android phone.
+          2. Back up your shop data in the app before replacing an older build.
+          3. If the installed app was signed with a different key, uninstall it once, then install this APK.
+          4. Future releases use the same signing key and install over this one.
+
+          `ridgeline-auto-shop.html` is the standalone web app and opens in any modern browser.
+
+          The APK is debug-signed for sideloading, not for Play Store distribution.
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -110,5 +145,7 @@ jobs:
           files: |
             release/ridgeline-auto-shop.apk
             release/ridgeline-auto-shop.html
+            release/SHA256SUMS
+            release/INSTALL.md
+          body_path: release/INSTALL.md
           overwrite_files: true
-          generate_release_notes: true
