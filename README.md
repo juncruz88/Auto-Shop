@@ -45,7 +45,9 @@ The build script expects `JAVA_HOME` and `ANDROID_HOME` at `~/tools/jdk` and `~/
 npm run build:apk
 ```
 
-This rebuilds the single-file HTML, then writes `downloads/ridgeline-auto-shop.apk`. The APK is debug-signed with `~/.android/debug.keystore` (generated on first run), which is suitable for sideloading but not for store distribution.
+This rebuilds the single-file HTML, then writes `downloads/ridgeline-auto-shop.apk`. It is signed with the checked-in `android-apk/debug.keystore` (alias `androiddebugkey`, password `android`), so every build shares the same signature and later builds can install over earlier ones. The key is for sideloading only, not store distribution.
+
+The first build using this fixed key must be installed after uninstalling any earlier build signed with a different debug key. Uninstalling clears the app's local data, so export a backup first. After that one-time uninstall, future builds update in place.
 
 ## CI
 

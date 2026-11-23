@@ -51,15 +51,10 @@ cp "$BUILD/app-unsigned.apk" "$BUILD/app-dex.apk"
 "$BUILD_TOOLS/zipalign" -f -p 4 "$BUILD/app-dex.apk" "$BUILD/app-aligned.apk"
 
 echo "6/6 Signing"
-KEYSTORE="$HOME/.android/debug.keystore"
-mkdir -p "$(dirname "$KEYSTORE")"
+KEYSTORE="$ROOT/android-apk/debug.keystore"
 if [ ! -f "$KEYSTORE" ]; then
-  "$JAVA_HOME/bin/keytool" -genkeypair -v \
-    -keystore "$KEYSTORE" \
-    -storepass android -keypass android \
-    -alias androiddebugkey \
-    -keyalg RSA -keysize 2048 -validity 10000 \
-    -dname "CN=Android Debug,O=Android,C=US" > /dev/null 2>&1
+  echo "Missing debug keystore: $KEYSTORE"
+  exit 1
 fi
 mkdir -p "$ROOT/downloads"
 "$BUILD_TOOLS/apksigner" sign \
