@@ -1607,6 +1607,18 @@ textarea {
   font-size: 12px;
 }
 
+.local-backup .local-backup-storage {
+  font-weight: 600;
+}
+
+.local-backup .local-backup-storage.shared {
+  color: #15803d;
+}
+
+.local-backup .local-backup-storage.app {
+  color: #b45309;
+}
+
 .ios-install {
   position: fixed;
   right: 20px;

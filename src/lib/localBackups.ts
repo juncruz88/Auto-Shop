@@ -8,9 +8,11 @@ const INDEXEDDB_PREFIX = 'idb:';
 
 export const MAX_LOCAL_BACKUPS = 10;
 export const AUTO_BACKUP_INTERVAL_MS = 5 * 60 * 1000;
+export type LocalBackupStorage = 'shared' | 'app';
 
 export interface LocalBackupSummary {
   id: string;
+  storage: LocalBackupStorage;
   savedAt: string;
   customers: number;
   vehicles: number;
@@ -110,9 +112,14 @@ function makeRecord(state: AppState): Omit<StoredBackup, 'id'> {
   };
 }
 
-function summaryFrom(record: StoredBackup, id: string): LocalBackupSummary {
+function summaryFrom(
+  record: StoredBackup,
+  id: string,
+  storage: LocalBackupStorage,
+): LocalBackupSummary {
   return {
     id,
+    storage,
     savedAt: record.savedAt,
     customers: record.customers,
     vehicles: record.vehicles,
@@ -143,6 +150,7 @@ function nativeSummaries(raw: string): LocalBackupSummary[] {
       return [
         {
           id: `${ANDROID_PREFIX}${nativeId}`,
+          storage: 'shared',
           savedAt: typeof record.savedAt === 'string' ? record.savedAt : '',
           customers: numberOrZero(record.customers),
           vehicles: numberOrZero(record.vehicles),
@@ -183,22 +191,23 @@ async function listIndexedDb(): Promise<LocalBackupSummary[]> {
   const request = transaction.objectStore(STORE_NAME).getAll() as IDBRequest<StoredBackup[]>;
   const records = await requestResult(request);
   return records.map((record) =>
-    summaryFrom(record, `${INDEXEDDB_PREFIX}${record.id ?? 0}`),
+    summaryFrom(record, `${INDEXEDDB_PREFIX}${record.id ?? 0}`, 'app'),
   );
 }
 
 /** Stores a snapshot and removes the oldest ones once the limit is reached. */
-export async function saveLocalBackup(state: AppState): Promise<void> {
+export async function saveLocalBackup(state: AppState): Promise<LocalBackupStorage> {
   const record = makeRecord(state);
   const bridge = androidBridge();
   if (bridge) {
     try {
-      if (bridge.save(JSON.stringify(record))) return;
+      if (bridge.save(JSON.stringify(record))) return 'shared';
     } catch {
       // Fall through to IndexedDB if the native bridge is unavailable.
     }
   }
   await saveIndexedDb(record);
+  return 'app';
 }
 
 export async function listLocalBackups(): Promise<LocalBackupSummary[]> {
@@ -236,7 +245,7 @@ export async function getLocalBackup(id: string): Promise<LocalBackup | null> {
       if (!text) return null;
       const record = JSON.parse(text) as StoredBackup;
       if (!record || !record.state) return null;
-      return { ...summaryFrom(record, id), state: record.state };
+      return { ...summaryFrom(record, id, 'shared'), state: record.state };
     } catch {
       return null;
     }
@@ -253,7 +262,7 @@ export async function getLocalBackup(id: string): Promise<LocalBackup | null> {
   >;
   const record = await requestResult(request);
   if (!record || record.id === undefined) return null;
-  return { ...summaryFrom(record, id), state: record.state };
+  return { ...summaryFrom(record, id, 'app'), state: record.state };
 }
 
 /** Creates a first snapshot only when no historical backups exist yet. */

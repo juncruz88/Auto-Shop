@@ -121,8 +121,12 @@ export default function Settings() {
     setError('');
     setSnapshotting(true);
     try {
-      await saveLocalBackup(state);
-      flash('Local snapshot saved.');
+      const storage = await saveLocalBackup(state);
+      flash(
+        storage === 'shared'
+          ? 'Snapshot saved to shared Downloads.'
+          : 'Snapshot saved in app storage only.',
+      );
       await reloadLocalBackups();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save a local snapshot.');
@@ -255,6 +259,11 @@ export default function Settings() {
                   <strong>{formatSavedAt(backup.savedAt)}</strong>
                   <span>
                     {plural(backup.jobs, 'work order')} · {plural(backup.customers, 'customer')}
+                  </span>
+                  <span className={`local-backup-storage ${backup.storage}`}>
+                    {backup.storage === 'shared'
+                      ? 'Shared Downloads · survives Clear storage'
+                      : 'App storage only · removed by Clear storage'}
                   </span>
                 </div>
                 <Button

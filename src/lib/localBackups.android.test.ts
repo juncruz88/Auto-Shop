@@ -54,12 +54,13 @@ describe('local backups on Android', () => {
       value: { AndroidAutoBackups: bridge },
     });
 
-    await saveLocalBackup(emptyState('Android Shop'));
+    expect(await saveLocalBackup(emptyState('Android Shop'))).toBe('shared');
 
     const backups = await listLocalBackups();
-    expect(backups.some((backup) => backup.id === 'android:42')).toBe(true);
+    expect(backups.find((backup) => backup.id === 'android:42')?.storage).toBe('shared');
 
     const restored = await getLocalBackup('android:42');
     expect(restored?.state.settings.shopName).toBe('Android Shop');
+    expect(restored?.storage).toBe('shared');
   });
 });
