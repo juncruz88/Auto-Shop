@@ -36,6 +36,7 @@ export default function Settings() {
   const [error, setError] = useState('');
   const [pending, setPending] = useState<RestorePreview | null>(null);
   const [localBackups, setLocalBackups] = useState<LocalBackupSummary[]>([]);
+  const [snapshotting, setSnapshotting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const noticeTimer = useRef<number | undefined>(undefined);
 
@@ -113,6 +114,20 @@ export default function Settings() {
       await saveLocalBackup(state);
     } catch {
       // Snapshotting is best-effort; the main state still saves locally.
+    }
+  }
+
+  async function snapshotNow() {
+    setError('');
+    setSnapshotting(true);
+    try {
+      await saveLocalBackup(state);
+      flash('Local snapshot saved.');
+      await reloadLocalBackups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save a local snapshot.');
+    } finally {
+      setSnapshotting(false);
     }
   }
 
@@ -225,6 +240,11 @@ export default function Settings() {
           older ask for storage access the first time. On the web, a full site-data clear removes
           them, so keep an exported JSON backup as well.
         </p>
+        <div className="settings-actions">
+          <Button onClick={() => void snapshotNow()} disabled={snapshotting}>
+            {snapshotting ? 'Saving snapshot...' : 'Snapshot now'}
+          </Button>
+        </div>
         {localBackups.length === 0 ? (
           <p className="muted">No local snapshots yet. One is saved automatically as you work.</p>
         ) : (
