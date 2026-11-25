@@ -26,7 +26,7 @@ describe('local backups', () => {
     expect(await listLocalBackups()).toEqual([]);
 
     for (let index = 0; index < MAX_LOCAL_BACKUPS + 2; index += 1) {
-      expect(await saveLocalBackup(emptyState(`Shop ${index}`))).toBe('app');
+      expect((await saveLocalBackup(emptyState(`Shop ${index}`))).storage).toBe('app');
     }
 
     const backups = await listLocalBackups();

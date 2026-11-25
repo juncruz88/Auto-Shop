@@ -9,6 +9,20 @@ const INDEXEDDB_PREFIX = 'idb:';
 export const MAX_LOCAL_BACKUPS = 10;
 export const AUTO_BACKUP_INTERVAL_MS = 5 * 60 * 1000;
 export type LocalBackupStorage = 'shared' | 'app';
+export type ExternalBackupCopy = 'saved' | 'not-configured' | 'failed';
+
+export interface ExternalBackupStatus {
+  available: boolean;
+  configured: boolean;
+  ready: boolean;
+  label: string;
+}
+
+export interface LocalBackupSaveResult {
+  storage: LocalBackupStorage;
+  external: ExternalBackupCopy;
+  externalError: string;
+}
 
 export interface LocalBackupSummary {
   id: string;
@@ -40,6 +54,10 @@ interface AndroidAutoBackupsBridge {
   save: (content: string) => boolean;
   list: () => string;
   read: (id: string) => string | null;
+  externalStatus?: () => string;
+  saveExternal?: (content: string) => string;
+  chooseExternalFolder?: () => void;
+  clearExternalFolder?: () => void;
 }
 
 declare global {
@@ -98,6 +116,62 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 
 function androidBridge(): AndroidAutoBackupsBridge | undefined {
   return typeof window === 'undefined' ? undefined : window.AndroidAutoBackups;
+}
+
+function externalBridge(): AndroidAutoBackupsBridge | undefined {
+  const bridge = androidBridge();
+  if (!bridge?.externalStatus || !bridge.saveExternal || !bridge.chooseExternalFolder) {
+    return undefined;
+  }
+  return bridge;
+}
+
+export function getExternalBackupStatus(): ExternalBackupStatus {
+  const bridge = externalBridge();
+  if (!bridge) {
+    return { available: false, configured: false, ready: false, label: '' };
+  }
+  try {
+    const parsed = JSON.parse(bridge.externalStatus!()) as Record<string, unknown>;
+    return {
+      available: true,
+      configured: parsed.configured === true,
+      ready: parsed.ready === true,
+      label:
+        typeof parsed.label === 'string' && parsed.label.trim()
+          ? parsed.label.trim()
+          : 'Selected folder',
+    };
+  } catch {
+    return { available: true, configured: false, ready: false, label: '' };
+  }
+}
+
+export function chooseExternalBackupFolder(): void {
+  externalBridge()?.chooseExternalFolder?.();
+}
+
+export function clearExternalBackupFolder(): void {
+  externalBridge()?.clearExternalFolder?.();
+}
+
+function externalSaveResult(raw: string): {
+  external: ExternalBackupCopy;
+  error: string;
+} {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (parsed.status === 'saved') return { external: 'saved', error: '' };
+    if (parsed.status === 'not-configured') {
+      return { external: 'not-configured', error: '' };
+    }
+    return {
+      external: 'failed',
+      error: typeof parsed.reason === 'string' ? parsed.reason : '',
+    };
+  } catch {
+    return { external: 'failed', error: 'Could not write to the backup folder.' };
+  }
 }
 
 function makeRecord(state: AppState): Omit<StoredBackup, 'id'> {
@@ -196,18 +270,36 @@ async function listIndexedDb(): Promise<LocalBackupSummary[]> {
 }
 
 /** Stores a snapshot and removes the oldest ones once the limit is reached. */
-export async function saveLocalBackup(state: AppState): Promise<LocalBackupStorage> {
+export async function saveLocalBackup(state: AppState): Promise<LocalBackupSaveResult> {
   const record = makeRecord(state);
+  const json = JSON.stringify(record);
   const bridge = androidBridge();
+  let storage: LocalBackupStorage = 'app';
+
   if (bridge) {
     try {
-      if (bridge.save(JSON.stringify(record))) return 'shared';
+      if (bridge.save(json)) storage = 'shared';
     } catch {
       // Fall through to IndexedDB if the native bridge is unavailable.
     }
   }
-  await saveIndexedDb(record);
-  return 'app';
+
+  let external: ExternalBackupCopy = 'not-configured';
+  let externalError = '';
+  const folderBridge = externalBridge();
+  if (folderBridge?.saveExternal) {
+    try {
+      const result = externalSaveResult(folderBridge.saveExternal(json));
+      external = result.external;
+      externalError = result.error;
+    } catch {
+      external = 'failed';
+      externalError = 'Could not write to the backup folder.';
+    }
+  }
+
+  if (storage === 'app') await saveIndexedDb(record);
+  return { storage, external, externalError };
 }
 
 export async function listLocalBackups(): Promise<LocalBackupSummary[]> {

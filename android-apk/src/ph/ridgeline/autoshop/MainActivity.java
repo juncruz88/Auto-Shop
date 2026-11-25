@@ -32,9 +32,11 @@ public class MainActivity extends Activity {
     private static final int SAVE_BACKUP_REQUEST = 42;
     private static final int OPEN_BACKUP_REQUEST = 43;
     private static final int AUTO_BACKUP_PERMISSION_REQUEST = 44;
+    private static final int EXTERNAL_BACKUP_FOLDER_REQUEST = 45;
 
     private WebView webView;
     private AutoBackupStore autoBackupStore;
+    private ExternalBackupStore externalBackupStore;
     private PermissionRequest pendingCameraRequest;
     private ValueCallback<Uri[]> pendingFileChooser;
     private volatile String pendingBackupContent;
@@ -46,6 +48,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         autoBackupStore = new AutoBackupStore(this);
+        externalBackupStore = new ExternalBackupStore(this);
         webView = new WebView(this);
         setContentView(webView);
 
@@ -180,6 +183,41 @@ public class MainActivity extends Activity {
         public String read(String id) {
             return autoBackupStore.read(id);
         }
+
+        @JavascriptInterface
+        public String externalStatus() {
+            return externalBackupStore.status();
+        }
+
+        @JavascriptInterface
+        public String saveExternal(String content) {
+            return externalBackupStore.save(content);
+        }
+
+        @JavascriptInterface
+        public void chooseExternalFolder() {
+            runOnUiThread(() -> {
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                        | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+                try {
+                    startActivityForResult(
+                            Intent.createChooser(intent, "Choose backup folder"),
+                            EXTERNAL_BACKUP_FOLDER_REQUEST
+                    );
+                } catch (Exception error) {
+                    toast("No file picker is available");
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void clearExternalFolder() {
+            externalBackupStore.clear();
+            notifyAutoBackupsChanged();
+        }
     }
 
     private boolean hasStorageAccess() {
@@ -242,6 +280,28 @@ public class MainActivity extends Activity {
                     toast("Backup saved");
                 } catch (Exception error) {
                     toast("Could not save the backup");
+                }
+            }
+            return;
+        }
+
+        if (requestCode == EXTERNAL_BACKUP_FOLDER_REQUEST) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                Uri uri = data.getData();
+                int flags = data.getFlags()
+                        & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                if ((flags & Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == 0) {
+                    toast("Choose a folder the app can write to");
+                    return;
+                }
+                try {
+                    getContentResolver().takePersistableUriPermission(uri, flags);
+                    externalBackupStore.setTree(uri);
+                    toast("Backup folder set");
+                    notifyAutoBackupsChanged();
+                } catch (SecurityException error) {
+                    toast("Could not keep access to that folder");
                 }
             }
             return;

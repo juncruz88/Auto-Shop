@@ -43,6 +43,8 @@ Runs the backup-normalisation and release-tag parser tests with Vitest. The same
 
 On Android, every automatic snapshot is also written to `Downloads/Ridgeline Auto Shop` and the newest 10 are kept. These files are outside the app's private data, so they remain after clearing the app's storage; the Settings page lists them for restore. Android 10 and newer uses MediaStore and needs no storage permission. Android 6–9 asks for the legacy storage permission the first time it saves to shared Downloads and falls back to IndexedDB if permission is denied.
 
+Settings → **Extra backup folder** can also copy each new snapshot to a folder chosen through Android's system picker. That folder can be on a USB SSD, an SD card, or a Google Drive account. The app keeps access across launches with a persisted URI permission. A Google Drive folder needs a connection while the snapshot is written; the provider syncs it afterward. Removing the folder stops future copies and leaves existing files in place. This option is Android-only: browsers cannot keep a Google Drive folder without a separate sign-in integration.
+
 On the web the app uses IndexedDB. Clearing all site data removes IndexedDB, so export a JSON backup before clearing browser data.
 
 ## Android APK

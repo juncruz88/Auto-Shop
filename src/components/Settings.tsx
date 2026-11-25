@@ -4,9 +4,13 @@ import { CURRENCIES, formatMoney, plural } from '../lib/format';
 import { readBackup, saveBackupFile, type RestorePreview } from '../lib/backup';
 import {
   MAX_LOCAL_BACKUPS,
+  chooseExternalBackupFolder,
+  clearExternalBackupFolder,
+  getExternalBackupStatus,
   getLocalBackup,
   listLocalBackups,
   saveLocalBackup,
+  type ExternalBackupStatus,
   type LocalBackupSummary,
 } from '../lib/localBackups';
 import { Button, Field, Modal, PageHeader } from './ui';
@@ -37,6 +41,10 @@ export default function Settings() {
   const [pending, setPending] = useState<RestorePreview | null>(null);
   const [localBackups, setLocalBackups] = useState<LocalBackupSummary[]>([]);
   const [snapshotting, setSnapshotting] = useState(false);
+  const [external, setExternal] = useState<ExternalBackupStatus>(() =>
+    getExternalBackupStatus(),
+  );
+  const [folderError, setFolderError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const noticeTimer = useRef<number | undefined>(undefined);
 
@@ -62,6 +70,7 @@ export default function Settings() {
     void reloadLocalBackups();
     const refresh = () => {
       void reloadLocalBackups();
+      setExternal(getExternalBackupStatus());
     };
     window.addEventListener('android-auto-backups-changed', refresh);
     return () => window.removeEventListener('android-auto-backups-changed', refresh);
@@ -71,6 +80,25 @@ export default function Settings() {
     setNotice(message);
     window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(''), 6000);
+  }
+
+  function chooseFolder() {
+    setFolderError('');
+    chooseExternalBackupFolder();
+  }
+
+  function removeFolder() {
+    if (
+      !window.confirm(
+        'Stop copying snapshots to this folder? Files already in the folder are not deleted.',
+      )
+    ) {
+      return;
+    }
+    setFolderError('');
+    clearExternalBackupFolder();
+    setExternal(getExternalBackupStatus());
+    flash('Backup folder removed.');
   }
 
   function save() {
@@ -119,15 +147,32 @@ export default function Settings() {
 
   async function snapshotNow() {
     setError('');
+    setFolderError('');
     setSnapshotting(true);
     try {
-      const storage = await saveLocalBackup(state);
-      flash(
-        storage === 'shared'
-          ? 'Snapshot saved to shared Downloads.'
-          : 'Snapshot saved in app storage only.',
-      );
+      const result = await saveLocalBackup(state);
+      const folder = getExternalBackupStatus();
+      const base =
+        result.storage === 'shared'
+          ? 'Snapshot saved to shared Downloads'
+          : 'Snapshot saved in app storage';
+
+      if (result.external === 'saved') {
+        flash(`${base} and copied to ${folder.label || 'the backup folder'}.`);
+      } else {
+        flash(`${base}.`);
+      }
+
+      if (result.external === 'failed') {
+        setFolderError(
+          `${base}, but the backup folder copy failed. ${
+            result.externalError || 'Check the folder or connection.'
+          }`,
+        );
+      }
+
       await reloadLocalBackups();
+      setExternal(folder);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save a local snapshot.');
     } finally {
@@ -240,9 +285,9 @@ export default function Settings() {
         </div>
         <p className="muted settings-copy">
           Automatic snapshots are kept on this device. On Android, copies are also saved to
-          Downloads/Ridgeline Auto Shop, so they survive clearing the app's data. Android 9 and
-          older ask for storage access the first time. On the web, a full site-data clear removes
-          them, so keep an exported JSON backup as well.
+          Downloads/Ridgeline Auto Shop, and optionally to an extra folder, so they survive
+          clearing the app's data. Android 9 and older ask for storage access the first time. On
+          the web, a full site-data clear removes them, so keep an exported JSON backup as well.
         </p>
         <div className="settings-actions">
           <Button onClick={() => void snapshotNow()} disabled={snapshotting}>
@@ -277,7 +322,56 @@ export default function Settings() {
             ))}
           </ul>
         )}
+        {!external.available ? (
+          <p className="muted">
+            Automatic copies to an SSD, SD card or Google Drive folder are available in the
+            Android app. In the browser, use Download backup to save a file to another drive.
+          </p>
+        ) : null}
       </section>
+
+      {external.available ? (
+        <section className="card">
+          <div className="card-head">
+            <h2>Extra backup folder</h2>
+            <span className="muted">SSD, SD card or Google Drive</span>
+          </div>
+          <p className="muted settings-copy">
+            Copy each new snapshot to a folder you choose, in addition to shared Downloads. Use
+            Android's folder picker to select a folder on a USB SSD, SD card, or Google Drive. A
+            Google Drive folder needs a connection while the snapshot is written; the Drive app
+            can finish syncing afterward.
+          </p>
+          <div className="backup-folder">
+            <span className="cell-sub">Current folder</span>
+            <strong>{external.configured ? external.label : 'Not chosen'}</strong>
+            {external.configured && !external.ready ? (
+              <span className="form-error">
+                Access to this folder was lost. Choose it again to resume copies.
+              </span>
+            ) : null}
+          </div>
+          <div className="settings-actions">
+            <Button variant="secondary" onClick={chooseFolder}>
+              {external.configured ? 'Change folder' : 'Choose folder'}
+            </Button>
+            {external.configured ? (
+              <Button variant="ghost" onClick={removeFolder}>
+                Remove
+              </Button>
+            ) : null}
+          </div>
+          {folderError ? (
+            <p className="form-error" role="alert">
+              {folderError}
+            </p>
+          ) : null}
+          <p className="muted">
+            Choose Snapshot now above to copy the current shop immediately. To restore a file from
+            this folder, use Restore from file.
+          </p>
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="card-head">

@@ -1,7 +1,12 @@
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AppState } from '../types';
-import { getLocalBackup, listLocalBackups, saveLocalBackup } from './localBackups';
+import {
+  getExternalBackupStatus,
+  getLocalBackup,
+  listLocalBackups,
+  saveLocalBackup,
+} from './localBackups';
 
 function emptyState(shopName: string): AppState {
   return {
@@ -54,7 +59,9 @@ describe('local backups on Android', () => {
       value: { AndroidAutoBackups: bridge },
     });
 
-    expect(await saveLocalBackup(emptyState('Android Shop'))).toBe('shared');
+    const result = await saveLocalBackup(emptyState('Android Shop'));
+    expect(result.storage).toBe('shared');
+    expect(result.external).toBe('not-configured');
 
     const backups = await listLocalBackups();
     expect(backups.find((backup) => backup.id === 'android:42')?.storage).toBe('shared');
@@ -62,5 +69,93 @@ describe('local backups on Android', () => {
     const restored = await getLocalBackup('android:42');
     expect(restored?.state.settings.shopName).toBe('Android Shop');
     expect(restored?.storage).toBe('shared');
+  });
+
+  it('copies each snapshot to the chosen external folder', async () => {
+    const copies: string[] = [];
+    const bridge = {
+      save() {
+        return true;
+      },
+      list() {
+        return '[]';
+      },
+      read() {
+        return null;
+      },
+      externalStatus() {
+        return JSON.stringify({
+          configured: true,
+          ready: true,
+          label: 'My Drive/Ridgeline backups',
+        });
+      },
+      saveExternal(content: string) {
+        copies.push(content);
+        return JSON.stringify({ status: 'saved' });
+      },
+      chooseExternalFolder() {},
+      clearExternalFolder() {},
+    };
+
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { AndroidAutoBackups: bridge },
+    });
+
+    expect(getExternalBackupStatus()).toEqual({
+      available: true,
+      configured: true,
+      ready: true,
+      label: 'My Drive/Ridgeline backups',
+    });
+
+    const result = await saveLocalBackup(emptyState('Folder Shop'));
+    expect(result).toEqual({
+      storage: 'shared',
+      external: 'saved',
+      externalError: '',
+    });
+    expect(copies).toHaveLength(1);
+    expect(JSON.parse(copies[0]).state.settings.shopName).toBe('Folder Shop');
+  });
+
+  it('reports a failed folder copy without losing the shared snapshot', async () => {
+    const bridge = {
+      save() {
+        return true;
+      },
+      list() {
+        return '[]';
+      },
+      read() {
+        return null;
+      },
+      externalStatus() {
+        return JSON.stringify({
+          configured: true,
+          ready: true,
+          label: 'USB SSD',
+        });
+      },
+      saveExternal() {
+        return JSON.stringify({
+          status: 'failed',
+          reason: 'Could not write to the backup folder. Check the connection or free space.',
+        });
+      },
+      chooseExternalFolder() {},
+      clearExternalFolder() {},
+    };
+
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { AndroidAutoBackups: bridge },
+    });
+
+    const result = await saveLocalBackup(emptyState('Fallback Shop'));
+    expect(result.storage).toBe('shared');
+    expect(result.external).toBe('failed');
+    expect(result.externalError).toContain('Check the connection');
   });
 });
