@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type Dispatch,
   type ReactNode,
 } from 'react';
@@ -26,8 +27,10 @@ import { formatMoney } from './lib/format';
 import {
   AUTO_BACKUP_INTERVAL_MS,
   ensureLocalBackup,
+  recoverLatestLocalBackup,
   saveLocalBackup,
 } from './lib/localBackups';
+import { loadStoredState, type LoadedShopState } from './lib/startup';
 
 const STORAGE_KEY = 'ridgeline-autoshop-v1';
 
@@ -219,47 +222,80 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-function loadState(): AppState {
-  const seeded = seedState();
+function initialState(): LoadedShopState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seeded;
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    if (
-      !Array.isArray(parsed.customers) ||
-      !Array.isArray(parsed.vehicles) ||
-      !Array.isArray(parsed.items) ||
-      !Array.isArray(parsed.jobs) ||
-      !Array.isArray(parsed.appointments)
-    ) {
-      return seeded;
-    }
-    return {
-      ...seeded,
-      ...parsed,
-      settings: parsed.settings ?? seeded.settings,
-      taxRate: parsed.taxRate ?? seeded.taxRate,
-      nextJobNumber: parsed.nextJobNumber ?? seeded.nextJobNumber,
-    } as AppState;
+    return loadStoredState(localStorage.getItem(STORAGE_KEY));
   } catch {
-    return seeded;
+    return loadStoredState(null);
   }
+}
+
+export interface StartupNotice {
+  tone: 'success' | 'warning';
+  message: string;
 }
 
 interface ShopContextValue {
   state: AppState;
   dispatch: Dispatch<Action>;
   money: (value: number) => string;
+  startupNotice: StartupNotice | null;
+  dismissStartupNotice: () => void;
 }
 
 const ShopContext = createContext<ShopContextValue | null>(null);
 
 export function ShopProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, loadState);
+  const initial = useRef<LoadedShopState>();
+  if (!initial.current) initial.current = initialState();
+  const initialLoad = initial.current!;
+  const [state, dispatch] = useReducer(reducer, initialLoad.state);
+  const [booting, setBooting] = useState(initialLoad.corrupt);
+  const [startupNotice, setStartupNotice] = useState<StartupNotice | null>(null);
   const firstRender = useRef(true);
   const lastAutoBackup = useRef(0);
 
   useEffect(() => {
+    if (!initialLoad.corrupt) return;
+    let cancelled = false;
+
+    void recoverLatestLocalBackup(initialLoad.state.settings)
+      .then((recovered) => {
+        if (cancelled) return;
+        if (recovered) {
+          dispatch({ type: 'data/import', state: recovered.state });
+          setStartupNotice({
+            tone: 'success',
+            message:
+              'Saved shop data was unreadable. Recovered the latest local snapshot. Review the data and save a new snapshot.',
+          });
+        } else {
+          setStartupNotice({
+            tone: 'warning',
+            message:
+              'Saved shop data was unreadable, and no valid local snapshot was found. The app started with demo data. Restore a backup before making changes.',
+          });
+        }
+        setBooting(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStartupNotice({
+          tone: 'warning',
+          message:
+            'Saved shop data was unreadable, and local snapshots could not be checked. The app started with demo data. Restore a backup before making changes.',
+        });
+        setBooting(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialLoad]);
+
+  useEffect(() => {
+    if (booting) return;
+
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
@@ -281,13 +317,28 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     void saveLocalBackup(state).catch(() => {
       // Keep the app usable if IndexedDB is unavailable or full.
     });
-  }, [state]);
+  }, [state, booting]);
 
   const money = useCallback(
     (value: number) => formatMoney(value, state.settings.currency),
     [state.settings.currency],
   );
-  const value = useMemo(() => ({ state, dispatch, money }), [state, money]);
+  const dismissStartupNotice = useCallback(() => setStartupNotice(null), []);
+  const value = useMemo(
+    () => ({ state, dispatch, money, startupNotice, dismissStartupNotice }),
+    [state, money, startupNotice, dismissStartupNotice],
+  );
+
+  if (booting) {
+    return (
+      <div className="page">
+        <p className="page-status" role="status">
+          Saved shop data is unreadable. Checking local snapshots…
+        </p>
+      </div>
+    );
+  }
+
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;
 }
 

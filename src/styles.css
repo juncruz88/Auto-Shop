@@ -1348,6 +1348,10 @@ textarea {
     padding-top: env(safe-area-inset-top);
   }
 
+  .startup-notice {
+    margin: 14px 16px -2px;
+  }
+
   .sidebar {
     position: fixed;
     top: auto;
@@ -1500,6 +1504,43 @@ textarea {
   color: #15803d;
   font-size: 12.5px;
   font-weight: 600;
+}
+
+.startup-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 18px 32px -2px;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.startup-notice.success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.startup-notice.warning {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.startup-notice-dismiss {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .settings-copy {

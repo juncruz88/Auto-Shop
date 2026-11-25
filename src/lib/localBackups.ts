@@ -1,4 +1,5 @@
-import type { AppState } from '../types';
+import type { AppState, ShopSettings } from '../types';
+import { readBackup } from './backup';
 
 const DB_NAME = 'ridgeline-autoshop';
 const STORE_NAME = 'local-backups';
@@ -37,6 +38,12 @@ export interface LocalBackupSummary {
 
 export interface LocalBackup extends LocalBackupSummary {
   state: AppState;
+}
+
+export interface LocalBackupRecovery {
+  backup: LocalBackup;
+  state: AppState;
+  notes: string[];
 }
 
 interface StoredBackup {
@@ -361,4 +368,31 @@ export async function getLocalBackup(id: string): Promise<LocalBackup | null> {
 export async function ensureLocalBackup(state: AppState): Promise<void> {
   const existing = await listLocalBackups();
   if (existing.length === 0) await saveLocalBackup(state);
+}
+
+/**
+ * Finds the newest local snapshot that contains a readable shop state. Snapshots
+ * that cannot be read or whose state is malformed are skipped.
+ */
+export async function recoverLatestLocalBackup(
+  fallbackSettings: ShopSettings,
+): Promise<LocalBackupRecovery | null> {
+  let backups: LocalBackupSummary[];
+  try {
+    backups = await listLocalBackups();
+  } catch {
+    return null;
+  }
+
+  for (const backup of backups) {
+    try {
+      const record = await getLocalBackup(backup.id);
+      if (!record) continue;
+      const preview = readBackup(JSON.stringify(record.state), fallbackSettings);
+      return { backup: record, state: preview.state, notes: preview.notes };
+    } catch {
+      // Try the next-newest snapshot.
+    }
+  }
+  return null;
 }

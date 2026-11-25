@@ -39,6 +39,7 @@ export default function Settings() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState<RestorePreview | null>(null);
+  const [pendingError, setPendingError] = useState('');
   const [localBackups, setLocalBackups] = useState<LocalBackupSummary[]>([]);
   const [snapshotting, setSnapshotting] = useState(false);
   const [external, setExternal] = useState<ExternalBackupStatus>(() =>
@@ -80,6 +81,11 @@ export default function Settings() {
     setNotice(message);
     window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(''), 6000);
+  }
+
+  function showError(message: string) {
+    setError(message);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function chooseFolder() {
@@ -131,17 +137,23 @@ export default function Settings() {
       return;
     }
     try {
+      setPendingError('');
       setPending(readBackup(await file.text(), state.settings));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'That backup could not be read.');
     }
   }
 
-  async function snapshotCurrent() {
+  async function snapshotCurrent(): Promise<string | null> {
     try {
       await saveLocalBackup(state);
-    } catch {
-      // Snapshotting is best-effort; the main state still saves locally.
+      return null;
+    } catch (err) {
+      const reason =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Local snapshot storage is unavailable.';
+      return `Could not save a safety snapshot: ${reason} The current shop was not replaced.`;
     }
   }
 
@@ -195,7 +207,11 @@ export default function Settings() {
       ) {
         return;
       }
-      await snapshotCurrent();
+      const failure = await snapshotCurrent();
+      if (failure) {
+        showError(failure);
+        return;
+      }
       const preview = readBackup(JSON.stringify(record.state), state.settings);
       dispatch({ type: 'data/import', state: preview.state });
       flash('Local backup restored.');
@@ -214,6 +230,11 @@ export default function Settings() {
       {notice ? (
         <p className="page-status" role="status">
           {notice}
+        </p>
+      ) : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
         </p>
       ) : null}
 
@@ -271,11 +292,6 @@ export default function Settings() {
             onChange={chooseBackup}
           />
         </div>
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
       </section>
 
       <section className="card">
@@ -407,7 +423,12 @@ export default function Settings() {
             variant="danger"
             onClick={async () => {
               if (!window.confirm('Reset all shop data back to the demo set?')) return;
-              await snapshotCurrent();
+              setError('');
+              const failure = await snapshotCurrent();
+              if (failure) {
+                showError(failure);
+                return;
+              }
               dispatch({ type: 'reset' });
               flash('Demo data restored.');
               await reloadLocalBackups();
@@ -423,16 +444,30 @@ export default function Settings() {
         <Modal
           title="Restore this backup?"
           subtitle="The current shop data will be replaced."
-          onClose={() => setPending(null)}
+          onClose={() => {
+            setPending(null);
+            setPendingError('');
+          }}
           size="sm"
           footer={
             <>
-              <Button variant="ghost" onClick={() => setPending(null)}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setPending(null);
+                  setPendingError('');
+                }}
+              >
                 Cancel
               </Button>
               <Button
                 onClick={async () => {
-                  await snapshotCurrent();
+                  setPendingError('');
+                  const failure = await snapshotCurrent();
+                  if (failure) {
+                    setPendingError(failure);
+                    return;
+                  }
                   dispatch({ type: 'data/import', state: pending.state });
                   setPending(null);
                   flash('Backup restored.');
@@ -466,6 +501,11 @@ export default function Settings() {
             </li>
             <li>{plural(pending.state.appointments.length, 'appointment')}</li>
           </ul>
+          {pendingError ? (
+            <p className="form-error" role="alert">
+              {pendingError}
+            </p>
+          ) : null}
           {pending.notes.length > 0 ? (
             <div className="backup-notes" role="status">
               <strong>Some entries were repaired or skipped</strong>

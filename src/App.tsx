@@ -12,7 +12,7 @@ import Settings from './components/Settings';
 
 function Shell() {
   const [tab, setTab] = useState<TabId>('dashboard');
-  const { state } = useShop();
+  const { state, startupNotice, dismissStartupNotice } = useShop();
 
   useEffect(() => {
     document.title = `${state.settings.shopName} — Shop Manager`;
@@ -22,6 +22,21 @@ function Shell() {
     <div className="app">
       <Sidebar tab={tab} onChange={setTab} />
       <main className="main">
+        {startupNotice ? (
+          <div
+            className={`startup-notice ${startupNotice.tone}`}
+            role={startupNotice.tone === 'warning' ? 'alert' : 'status'}
+          >
+            <span>{startupNotice.message}</span>
+            <button
+              type="button"
+              className="startup-notice-dismiss"
+              onClick={dismissStartupNotice}
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : null}
         {tab === 'dashboard' ? <Dashboard navigate={setTab} /> : null}
         {tab === 'jobs' ? <Jobs /> : null}
         {tab === 'customers' ? <Customers /> : null}
